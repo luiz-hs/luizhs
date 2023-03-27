@@ -1,5 +1,5 @@
 <h1 align="center">Oi 👋, Eu sou Luiz</h1>
-<h3 align="center">Entusiasta de ciência e analise de dados no mundo digital</h3>
+<h3 align="center">Entusiasta de ciência e análise de dados no mundo digital</h3>
 
 - 🔭 Atualmente trabalho como Analista de inteligência de produtos em uma empresa do segmento antifraude
 
