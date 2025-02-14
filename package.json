@@ -1,0 +1,16 @@
+{
+  "name": "luizhs",
+  "version": "1.0.0",
+  "description": "<h1 align=\"center\">Oi 👋, Eu sou Luiz</h1> <h3 align=\"center\">Entusiasta de ciência e análise de dados no mundo digital</h3>",
+  "main": "index.js",
+  "scripts": {
+    "dev": "next dev"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "next": "^13.1.6",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}
