@@ -1,5 +1,5 @@
 function Home(){
-    return <h1>Teste 55</h1>
+    return <h1>Você não é especial.</h1>
 
 }
  
