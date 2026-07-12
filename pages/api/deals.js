@@ -1,3 +1,5 @@
+import { getMlToken, ML_AUTH_HELP } from '../../lib/ml-auth';
+
 // Lista diária de ofertas: varre buscas populares no Mercado Livre e
 // devolve os produtos com maior desconto, deduplificados e ordenados.
 // Aceita `queries` (termos separados por vírgula) para personalizar os
@@ -47,9 +49,10 @@ export default async function handler(req, res) {
   }
 
   const headers = { 'User-Agent': 'ofertas-platform/1.0' };
-  if (process.env.ML_ACCESS_TOKEN) {
-    headers.Authorization = `Bearer ${process.env.ML_ACCESS_TOKEN}`;
-  }
+  try {
+    const token = await getMlToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+  } catch {}
 
   try {
     const settled = await Promise.allSettled(terms.map((t) => searchTerm(t, headers)));
@@ -58,9 +61,7 @@ export default async function handler(req, res) {
       const first = failures[0].reason;
       const needsAuth = first && (first.status === 401 || first.status === 403);
       return res.status(502).json({
-        error: needsAuth
-          ? 'O Mercado Livre exigiu autenticação. Gere um token em developers.mercadolivre.com.br e defina ML_ACCESS_TOKEN no .env.local.'
-          : 'Não consegui consultar o Mercado Livre agora. Tente de novo em instantes.',
+        error: needsAuth ? ML_AUTH_HELP : 'Não consegui consultar o Mercado Livre agora. Tente de novo em instantes.',
       });
     }
 

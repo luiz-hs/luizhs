@@ -1,6 +1,8 @@
+import { getMlToken, ML_AUTH_HELP } from '../../lib/ml-auth';
+
 // Busca de produtos com desconto.
-// Mercado Livre: API pública de busca (funciona sem credenciais; se a sua
-// conta exigir, defina ML_ACCESS_TOKEN no .env.local).
+// Mercado Livre: usa token gerado automaticamente com ML_CLIENT_ID/ML_CLIENT_SECRET
+// (ou ML_ACCESS_TOKEN fixo); sem credenciais tenta a busca pública.
 // Amazon/Shopee: exigem credenciais oficiais (PA-API / Open API de afiliados),
 // então a busca automática fica indisponível sem elas — use o fluxo "Colar link".
 
@@ -28,18 +30,17 @@ export default async function handler(req, res) {
     url.searchParams.set('limit', '30');
 
     const headers = { 'User-Agent': 'ofertas-platform/1.0' };
-    if (process.env.ML_ACCESS_TOKEN) {
-      headers.Authorization = `Bearer ${process.env.ML_ACCESS_TOKEN}`;
-    }
+    try {
+      const token = await getMlToken();
+      if (token) headers.Authorization = `Bearer ${token}`;
+    } catch {}
 
     const response = await fetch(url.toString(), { headers });
     if (!response.ok) {
       const body = await response.text();
       const needsAuth = response.status === 401 || response.status === 403;
       return res.status(502).json({
-        error: needsAuth
-          ? 'O Mercado Livre passou a exigir autenticação para esta busca. Gere um token em developers.mercadolivre.com.br e defina ML_ACCESS_TOKEN no .env.local.'
-          : `Erro na API do Mercado Livre (${response.status}).`,
+        error: needsAuth ? ML_AUTH_HELP : `Erro na API do Mercado Livre (${response.status}).`,
         detail: body.slice(0, 300),
       });
     }
