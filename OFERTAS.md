@@ -26,7 +26,7 @@ npm run dev                  # abre em http://localhost:3000
 
 | Recurso | Sem credenciais | Com credenciais |
 |---|---|---|
-| Busca de ofertas no Mercado Livre | ✅ API pública | ✅ (`ML_ACCESS_TOKEN` se a API exigir) |
+| Busca de ofertas no Mercado Livre | ⚠️ só se a API pública aceitar | ✅ (`ML_CLIENT_ID` + `ML_CLIENT_SECRET`, token renovado sozinho) |
 | Busca na Amazon / Shopee | ❌ (use "Colar link") | 🔜 exige PA-API / Open API |
 | Link de afiliado Amazon | ✅ (`?tag=sua-tag`) | ✅ |
 | Link de afiliado Mercado Livre | ✅ (`matt_word`/`matt_tool`) | ✅ |
