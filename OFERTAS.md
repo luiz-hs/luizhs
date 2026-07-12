@@ -17,9 +17,10 @@ npm run dev                  # abre em http://localhost:3000
    - **Mercado Livre**: sua palavra-chave de afiliado (`matt_word`) e, se tiver, o id da ferramenta (`matt_tool`);
    - **Shopee**: o App ID da Open API (opcional — veja abaixo);
    - **Audiência**: descreva seu público para a IA personalizar a copy.
-2. **🔍 Buscar ofertas**: pesquise no Mercado Livre e filtre pelo desconto mínimo. Cada resultado mostra preço, preço anterior e % de desconto.
-3. **🔗 Colar link**: cole qualquer URL de produto da Amazon, Mercado Livre ou Shopee, preencha nome/preços/cupom e gere.
-4. No gerador: escolha o **tom** (urgência, desejo, economia, exclusividade), edite a mensagem se quiser, **copie** ou envie **direto pro WhatsApp**.
+2. **🔥 Ofertas do dia**: carregue a lista diária com os maiores descontos do Mercado Livre (nas categorias populares ou nos "interesses do grupo" que você configurar), marque as ofertas que quiser e clique em **Gerar mensagens** — todas saem de uma vez, cada uma com link de afiliado e copy pronta, com botão de copiar individual, "copiar todas" e envio direto no WhatsApp.
+3. **🔍 Buscar ofertas**: pesquise no Mercado Livre e filtre pelo desconto mínimo. Cada resultado mostra preço, preço anterior e % de desconto.
+4. **🔗 Colar link**: cole qualquer URL de produto da Amazon, Mercado Livre ou Shopee, preencha nome/preços/cupom e gere.
+5. No gerador: escolha o **tom** (urgência, desejo, economia, exclusividade), edite a mensagem se quiser, **copie** ou envie **direto pro WhatsApp**.
 
 ## O que funciona sem credenciais
 
@@ -35,6 +36,7 @@ npm run dev                  # abre em http://localhost:3000
 ## Estrutura
 
 - `pages/index.js` — interface da plataforma;
+- `pages/api/deals.js` — lista diária de ofertas com maior desconto (Mercado Livre, com cache por dia);
 - `pages/api/search.js` — busca de ofertas (Mercado Livre);
 - `pages/api/copy.js` — copy por IA (Claude) com fallback em templates;
 - `pages/api/shopee-link.js` — shortlink comissionado via Shopee Open API;

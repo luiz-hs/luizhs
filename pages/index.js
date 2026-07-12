@@ -3,12 +3,22 @@ import Head from 'next/head';
 import { MARKETPLACES, detectMarketplace, buildAffiliateLink } from '../lib/affiliates';
 import { TONES, generateCopy } from '../lib/copywriter';
 
-const EMPTY_CONFIG = { amazonTag: '', mlWord: '', mlTool: '', shopeeAppId: '', audience: '' };
+const EMPTY_CONFIG = { amazonTag: '', mlWord: '', mlTool: '', shopeeAppId: '', audience: '', interests: '' };
 
 export default function Home() {
   const [config, setConfig] = useState(EMPTY_CONFIG);
   const [showConfig, setShowConfig] = useState(false);
-  const [tab, setTab] = useState('buscar');
+  const [tab, setTab] = useState('dia');
+
+  // Ofertas do dia
+  const [deals, setDeals] = useState([]);
+  const [dealsMsg, setDealsMsg] = useState('');
+  const [dealsLoading, setDealsLoading] = useState(false);
+  const [dealsDay, setDealsDay] = useState('');
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [batch, setBatch] = useState(null); // lista de mensagens geradas
+  const [batchTone, setBatchTone] = useState('urgencia');
+  const [batchCopied, setBatchCopied] = useState(-2); // -2 nada, -1 todas, n = índice
 
   // Busca
   const [query, setQuery] = useState('');
@@ -63,6 +73,80 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function loadDeals() {
+    setDealsLoading(true);
+    setDealsMsg('');
+    try {
+      const params = new URLSearchParams({ minDiscount: String(minDiscount) });
+      if (config.interests) params.set('queries', config.interests);
+      const res = await fetch(`/api/deals?${params}`);
+      const data = await res.json();
+      if (data.error) setDealsMsg(`⚠️ ${data.error}`);
+      else if (!data.items.length)
+        setDealsMsg('Nenhuma oferta encontrada hoje com esse desconto mínimo. Tente reduzir o filtro ou ajustar os interesses.');
+      setDeals(data.items || []);
+      setDealsDay(data.day || '');
+      setSelectedIds([]);
+    } catch {
+      setDealsMsg('⚠️ Falha ao carregar as ofertas. Tente novamente.');
+    } finally {
+      setDealsLoading(false);
+    }
+  }
+
+  function toggleSelect(id) {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  function buildBatch(items, tone) {
+    return items.map((item) => {
+      const affiliate = buildAffiliateLink(item.url, config, item.marketplace);
+      const product = {
+        ...item,
+        link: affiliate.url,
+        marketplaceLabel: MARKETPLACES[item.marketplace]
+          ? `${MARKETPLACES[item.marketplace].emoji} ${MARKETPLACES[item.marketplace].label}`
+          : '',
+      };
+      return { product, warning: affiliate.warning, copy: generateCopy(product, tone) };
+    });
+  }
+
+  function openBatch() {
+    const items = deals.filter((d) => selectedIds.includes(d.id));
+    if (!items.length) return;
+    setBatch(buildBatch(items, batchTone));
+    setBatchCopied(-2);
+  }
+
+  function changeBatchTone(t) {
+    setBatchTone(t);
+    if (batch) {
+      setBatch(buildBatch(batch.map((b) => b.product), t));
+      setBatchCopied(-2);
+    }
+  }
+
+  function updateBatchCopy(index, text) {
+    setBatch((prev) => prev.map((b, i) => (i === index ? { ...b, copy: text } : b)));
+  }
+
+  async function copyBatchItem(index) {
+    try {
+      await navigator.clipboard.writeText(batch[index].copy);
+      setBatchCopied(index);
+      setTimeout(() => setBatchCopied(-2), 2000);
+    } catch {}
+  }
+
+  async function copyBatchAll() {
+    try {
+      await navigator.clipboard.writeText(batch.map((b) => b.copy).join('\n\n➖➖➖➖➖➖\n\n'));
+      setBatchCopied(-1);
+      setTimeout(() => setBatchCopied(-2), 2000);
+    } catch {}
   }
 
   function openGenerator(product) {
@@ -223,10 +307,21 @@ export default function Home() {
               placeholder="ex: mães de primeira viagem que buscam economizar em produtos de bebê"
             />
           </label>
+          <label>
+            Interesses do grupo para as ofertas do dia (separados por vírgula)
+            <input
+              value={config.interests}
+              onChange={(e) => saveConfig({ ...config, interests: e.target.value })}
+              placeholder="ex: air fryer, produtos de bebê, maquiagem, panela elétrica"
+            />
+          </label>
         </section>
       )}
 
       <nav className="tabs">
+        <button className={tab === 'dia' ? 'active' : ''} onClick={() => setTab('dia')}>
+          🔥 Ofertas do dia
+        </button>
         <button className={tab === 'buscar' ? 'active' : ''} onClick={() => setTab('buscar')}>
           🔍 Buscar ofertas
         </button>
@@ -234,6 +329,90 @@ export default function Home() {
           🔗 Colar link de produto
         </button>
       </nav>
+
+      {tab === 'dia' && (
+        <section className="card">
+          <div className="dealsbar">
+            <div>
+              <h2>🔥 Ofertas de hoje{dealsDay ? ` — ${dealsDay.split('-').reverse().join('/')}` : ''}</h2>
+              <p className="muted">
+                Lista montada com os maiores descontos do Mercado Livre
+                {config.interests ? ' nos seus interesses' : ' em categorias populares'}. Marque as que quer divulgar.
+              </p>
+            </div>
+            <button onClick={loadDeals} disabled={dealsLoading}>
+              {dealsLoading ? 'Garimpando…' : deals.length ? '🔄 Atualizar lista' : '⛏️ Carregar ofertas de hoje'}
+            </button>
+          </div>
+          <label className="slider">
+            Desconto mínimo: <strong>{minDiscount}%</strong>
+            <input
+              type="range"
+              min="0"
+              max="70"
+              step="5"
+              value={minDiscount}
+              onChange={(e) => setMinDiscount(Number(e.target.value))}
+            />
+          </label>
+
+          {dealsMsg && <p className="msg">{dealsMsg}</p>}
+
+          <div className="results">
+            {deals.map((item) => {
+              const checked = selectedIds.includes(item.id);
+              return (
+                <article key={item.id} className={`product selectable${checked ? ' checked' : ''}`} onClick={() => toggleSelect(item.id)}>
+                  <input
+                    type="checkbox"
+                    className="check"
+                    checked={checked}
+                    onChange={() => toggleSelect(item.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`Selecionar ${item.title}`}
+                  />
+                  {item.discountPct > 0 && <span className="badge">-{item.discountPct}%</span>}
+                  {item.thumbnail && <img src={item.thumbnail} alt="" />}
+                  <h3>{item.title}</h3>
+                  <p className="price">
+                    {item.oldPrice && (
+                      <s>{item.oldPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</s>
+                    )}{' '}
+                    <strong>{item.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong>
+                  </p>
+                  {item.freeShipping && <p className="shipping">🚚 Frete grátis</p>}
+                  <button
+                    className="ghost"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openGenerator(item);
+                    }}
+                  >
+                    ✨ Gerar individual
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+
+          {deals.length > 0 && (
+            <div className="selectbar">
+              <span>
+                <strong>{selectedIds.length}</strong> selecionada{selectedIds.length === 1 ? '' : 's'}
+              </span>
+              <button
+                className="ghost"
+                onClick={() => setSelectedIds(selectedIds.length === deals.length ? [] : deals.map((d) => d.id))}
+              >
+                {selectedIds.length === deals.length ? 'Desmarcar todas' : 'Marcar todas'}
+              </button>
+              <button disabled={!selectedIds.length} onClick={openBatch}>
+                ✨ Gerar mensagens ({selectedIds.length})
+              </button>
+            </div>
+          )}
+        </section>
+      )}
 
       {tab === 'buscar' && (
         <section className="card">
@@ -374,6 +553,61 @@ export default function Home() {
         </div>
       )}
 
+      {batch && (
+        <div className="overlay" onClick={() => setBatch(null)}>
+          <div className="modal wide" onClick={(e) => e.stopPropagation()}>
+            <button className="close" onClick={() => setBatch(null)}>✕</button>
+            <h2>✨ {batch.length} mensagen{batch.length === 1 ? '' : 's'} pronta{batch.length === 1 ? '' : 's'}</h2>
+            <p className="muted">Escolha o tom, ajuste o que quiser e copie uma a uma — ou todas de uma vez.</p>
+
+            <div className="tones">
+              {Object.values(TONES).map((t) => (
+                <button
+                  key={t.id}
+                  className={batchTone === t.id ? 'active' : ''}
+                  title={t.hint}
+                  onClick={() => changeBatchTone(t.id)}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="batchlist">
+              {batch.map((b, i) => (
+                <div key={b.product.id || i} className="batchitem">
+                  <p className="batchtitle">
+                    {i + 1}. {b.product.title}
+                    {b.product.discountPct ? <span className="minibadge">-{b.product.discountPct}%</span> : null}
+                  </p>
+                  {b.warning && <p className="warning">⚠️ {b.warning}</p>}
+                  <textarea value={b.copy} onChange={(e) => updateBatchCopy(i, e.target.value)} rows={9} />
+                  <div className="actions">
+                    <button onClick={() => copyBatchItem(i)}>
+                      {batchCopied === i ? '✅ Copiada!' : '📋 Copiar'}
+                    </button>
+                    <a
+                      className="whatsapp"
+                      href={`https://wa.me/?text=${encodeURIComponent(b.copy)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      💬 WhatsApp
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="actions sticky">
+              <button onClick={copyBatchAll}>
+                {batchCopied === -1 ? '✅ Todas copiadas!' : `📋 Copiar todas (${batch.length})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <footer>
         <p className="muted">
           Divulgue com transparência: identifique-se como afiliado nos seus grupos. Preços mudam a qualquer momento —
@@ -430,6 +664,27 @@ export default function Home() {
         .product .shipping { color: #58d68d; font-size: 0.8rem; }
         .badge { position: absolute; top: 10px; right: 10px; background: #e74c3c; color: #fff; font-weight: 700; font-size: 0.8rem; padding: 3px 8px; border-radius: 20px; z-index: 1; }
         .paste { display: flex; flex-direction: column; gap: 12px; }
+        .dealsbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+        .product.selectable { cursor: pointer; }
+        .product.selectable:hover { border-color: #6c7bff; }
+        .product.checked { border-color: #6c7bff; box-shadow: 0 0 0 1px #6c7bff; }
+        .check { position: absolute; top: 10px; left: 10px; width: 20px; height: 20px; accent-color: #6c7bff; z-index: 1; cursor: pointer; }
+        .selectbar {
+          position: sticky; bottom: 12px; margin-top: 18px;
+          display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+          background: #10131f; border: 1px solid #3a4166; border-radius: 12px;
+          padding: 12px 16px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        }
+        .selectbar span { color: #b9bed2; font-size: 0.9rem; }
+        .selectbar button:last-child { margin-left: auto; }
+        .modal.wide { max-width: 760px; }
+        .batchlist { display: flex; flex-direction: column; gap: 18px; margin-top: 8px; }
+        .batchitem { background: #0f1220; border: 1px solid #262b44; border-radius: 12px; padding: 14px; }
+        .batchtitle { font-size: 0.9rem; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+        .minibadge { background: #e74c3c; color: #fff; font-size: 0.72rem; font-weight: 700; padding: 2px 7px; border-radius: 20px; }
+        .batchitem textarea { font-size: 0.85rem; }
+        .batchitem .actions { margin-top: 10px; }
+        .actions.sticky { position: sticky; bottom: 0; background: #181c2e; padding: 12px 0 0; margin-top: 16px; }
         .overlay { position: fixed; inset: 0; background: rgba(5, 7, 15, 0.75); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
         .modal { background: #181c2e; border: 1px solid #2e3450; border-radius: 16px; padding: 24px; max-width: 640px; width: 100%; max-height: 90vh; overflow-y: auto; position: relative; }
         .close { position: absolute; top: 12px; right: 12px; background: transparent; border: none; color: #9aa0b5; font-size: 1.1rem; }
