@@ -1,10 +1,20 @@
 import { useEffect, useState } from 'react';
 import Head from 'next/head';
 import { AREAS, AREA_BY_ID } from '../../lib/segundo-cerebro/areas';
+import { ONBOARDING_STEPS } from '../../lib/segundo-cerebro/onboarding';
+import { CATEGORIAS } from '../../lib/segundo-cerebro/categorias';
 
 function formatDate(iso) {
   if (!iso) return '';
   return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+function formatBRL(value) {
+  return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 export default function SegundoCerebro() {
@@ -12,15 +22,36 @@ export default function SegundoCerebro() {
   const [empresaInput, setEmpresaInput] = useState('');
   const [tab, setTab] = useState(AREAS[0].id);
 
+  // Onboarding / perfil de negócio
+  const [profile, setProfile] = useState(null);
+  const [profileChecked, setProfileChecked] = useState(false);
+  const [wizardStep, setWizardStep] = useState(0);
+  const [wizardAnswers, setWizardAnswers] = useState({});
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  // Diagnóstico por IA
+  const [diagnostico, setDiagnostico] = useState(null);
+  const [diagnosticoLoading, setDiagnosticoLoading] = useState(false);
+
+  // Captura de notas por área
   const [notesByArea, setNotesByArea] = useState({});
   const [loadingArea, setLoadingArea] = useState(false);
   const [captureText, setCaptureText] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
 
+  // Chat
   const [question, setQuestion] = useState('');
   const [asking, setAsking] = useState(false);
   const [conversation, setConversation] = useState([]);
+
+  // Faturamento
+  const [lancamentos, setLancamentos] = useState([]);
+  const [resumo, setResumo] = useState({ totalReceitas: 0, totalDespesas: 0, saldo: 0 });
+  const [loadingFin, setLoadingFin] = useState(false);
+  const [finForm, setFinForm] = useState({ tipo: 'receita', categoria: 'vendas', descricao: '', valor: '', data: todayISO() });
+  const [finSaving, setFinSaving] = useState(false);
+  const [finMsg, setFinMsg] = useState('');
 
   useEffect(() => {
     try {
@@ -30,8 +61,13 @@ export default function SegundoCerebro() {
   }, []);
 
   useEffect(() => {
-    if (empresa && tab !== 'perguntar') loadNotes(tab);
-  }, [empresa, tab]);
+    if (empresa) loadProfile();
+  }, [empresa]);
+
+  useEffect(() => {
+    if (empresa && profile && tab !== 'perguntar' && tab !== 'faturamento') loadNotes(tab);
+    if (empresa && profile && tab === 'faturamento') loadFinanceiro();
+  }, [empresa, profile, tab]);
 
   function saveEmpresa(e) {
     e.preventDefault();
@@ -46,10 +82,87 @@ export default function SegundoCerebro() {
   function trocarEmpresa() {
     setEmpresa('');
     setEmpresaInput('');
+    setProfile(null);
+    setProfileChecked(false);
+    setWizardStep(0);
+    setWizardAnswers({});
+    setDiagnostico(null);
     setNotesByArea({});
     try {
       localStorage.removeItem('segundo-cerebro-empresa');
     } catch {}
+  }
+
+  async function loadProfile() {
+    try {
+      const res = await fetch(`/api/segundo-cerebro/profile?${new URLSearchParams({ empresa })}`);
+      const data = await res.json();
+      setProfile(data.profile || null);
+      if (data.profile) loadDiagnostico();
+    } catch {
+      setProfile(null);
+    } finally {
+      setProfileChecked(true);
+    }
+  }
+
+  async function loadDiagnostico() {
+    try {
+      const res = await fetch(`/api/segundo-cerebro/diagnostico?${new URLSearchParams({ empresa })}`);
+      const data = await res.json();
+      if (data.diagnostico) {
+        setDiagnostico(data.diagnostico);
+      } else {
+        gerarDiagnostico();
+      }
+    } catch {}
+  }
+
+  async function gerarDiagnostico() {
+    setDiagnosticoLoading(true);
+    try {
+      const res = await fetch('/api/segundo-cerebro/diagnostico', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ empresa }),
+      });
+      const data = await res.json();
+      if (data.diagnostico) setDiagnostico(data.diagnostico);
+    } catch {
+    } finally {
+      setDiagnosticoLoading(false);
+    }
+  }
+
+  function chooseWizardOption(field, value) {
+    const next = { ...wizardAnswers, [field]: value };
+    setWizardAnswers(next);
+    if (wizardStep < ONBOARDING_STEPS.length - 1) {
+      setWizardStep(wizardStep + 1);
+    }
+  }
+
+  async function submitProfile(e) {
+    e.preventDefault();
+    setSavingProfile(true);
+    try {
+      const res = await fetch('/api/segundo-cerebro/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ empresa, answers: wizardAnswers }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Falha ao salvar o perfil.');
+        return;
+      }
+      setProfile(data.profile);
+      gerarDiagnostico();
+    } catch {
+      alert('Falha ao salvar o perfil. Tente novamente.');
+    } finally {
+      setSavingProfile(false);
+    }
   }
 
   async function loadNotes(area) {
@@ -130,8 +243,64 @@ export default function SegundoCerebro() {
     }
   }
 
+  async function loadFinanceiro() {
+    setLoadingFin(true);
+    try {
+      const res = await fetch(`/api/segundo-cerebro/financeiro?${new URLSearchParams({ empresa })}`);
+      const data = await res.json();
+      setLancamentos(data.lancamentos || []);
+      setResumo(data.resumo || { totalReceitas: 0, totalDespesas: 0, saldo: 0 });
+    } catch {
+    } finally {
+      setLoadingFin(false);
+    }
+  }
+
+  async function handleAddLancamento(e) {
+    e.preventDefault();
+    if (!finForm.valor || Number(finForm.valor) <= 0) {
+      setFinMsg('⚠️ Informe um valor maior que zero.');
+      return;
+    }
+    setFinSaving(true);
+    setFinMsg('');
+    try {
+      const res = await fetch('/api/segundo-cerebro/financeiro', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ empresa, ...finForm }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setFinMsg(`⚠️ ${data.error || 'Falha ao salvar.'}`);
+        return;
+      }
+      setFinForm((f) => ({ ...f, descricao: '', valor: '' }));
+      setFinMsg('✅ Lançamento salvo.');
+      setTimeout(() => setFinMsg(''), 2500);
+      loadFinanceiro();
+    } catch {
+      setFinMsg('⚠️ Falha ao salvar. Tente novamente.');
+    } finally {
+      setFinSaving(false);
+    }
+  }
+
+  async function handleDeleteLancamento(id) {
+    try {
+      await fetch('/api/segundo-cerebro/financeiro', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ empresa, id }),
+      });
+      loadFinanceiro();
+    } catch {}
+  }
+
   const area = AREA_BY_ID[tab];
   const notes = notesByArea[tab] || [];
+  const wizardDone = wizardStep >= ONBOARDING_STEPS.length;
+  const currentStep = ONBOARDING_STEPS[wizardStep];
 
   return (
     <div className="app">
@@ -143,7 +312,7 @@ export default function SegundoCerebro() {
       <header>
         <div>
           <h1>🧠 Segundo Cérebro</h1>
-          <p>Registre o que acontece na empresa por área e pergunte quando precisar lembrar.</p>
+          <p>Registre o que acontece na empresa, controle o financeiro e pergunte quando precisar lembrar.</p>
         </div>
         {empresa && (
           <button className="ghost" onClick={trocarEmpresa}>
@@ -166,20 +335,200 @@ export default function SegundoCerebro() {
             <button type="submit">Começar</button>
           </form>
         </section>
+      ) : !profileChecked ? (
+        <section className="card">
+          <p className="muted">Carregando…</p>
+        </section>
+      ) : !profile ? (
+        <section className="card wizard">
+          <p className="muted">
+            Passo {wizardStep + 1} de {ONBOARDING_STEPS.length}
+          </p>
+          <div className="progress">
+            <div className="progress-bar" style={{ width: `${((wizardStep + (wizardDone ? 1 : 0)) / ONBOARDING_STEPS.length) * 100}%` }} />
+          </div>
+
+          {!wizardDone ? (
+            <>
+              <h2>{currentStep.question}</h2>
+              {currentStep.type === 'choice' ? (
+                <div className="options">
+                  {currentStep.options.map((opt) => (
+                    <button key={opt.value} className="option" onClick={() => chooseWizardOption(currentStep.field, opt.value)}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <form
+                  className="capture"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    setWizardStep(wizardStep + 1);
+                  }}
+                >
+                  <textarea
+                    value={wizardAnswers[currentStep.field] || ''}
+                    onChange={(e) => setWizardAnswers({ ...wizardAnswers, [currentStep.field]: e.target.value })}
+                    placeholder={currentStep.placeholder}
+                    rows={3}
+                    required
+                  />
+                  <button type="submit">Continuar</button>
+                </form>
+              )}
+              {wizardStep > 0 && (
+                <button className="ghost back" onClick={() => setWizardStep(wizardStep - 1)}>
+                  ← Voltar
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <h2>Pronto para montar seu diagnóstico</h2>
+              <p className="muted">Confirme as respostas abaixo (ou volte pra corrigir algo) e gere seu diagnóstico inicial.</p>
+              <ul className="summary">
+                {ONBOARDING_STEPS.map((s) => (
+                  <li key={s.field}>
+                    <strong>{s.question}</strong>
+                    <span>{wizardAnswers[s.field]}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="actions">
+                <button className="ghost" onClick={() => setWizardStep(ONBOARDING_STEPS.length - 1)}>
+                  ← Corrigir
+                </button>
+                <button onClick={submitProfile} disabled={savingProfile}>
+                  {savingProfile ? 'Salvando…' : '✅ Gerar meu diagnóstico'}
+                </button>
+              </div>
+            </>
+          )}
+        </section>
       ) : (
         <>
+          {(diagnostico || diagnosticoLoading) && (
+            <section className="card diagnostico">
+              <div className="diag-head">
+                <h2>📊 Diagnóstico do negócio</h2>
+                {diagnostico && (
+                  <button className="ghost" onClick={gerarDiagnostico} disabled={diagnosticoLoading}>
+                    {diagnosticoLoading ? 'Gerando…' : '🔄 Gerar de novo'}
+                  </button>
+                )}
+              </div>
+              {diagnosticoLoading && !diagnostico ? (
+                <p className="muted">Analisando seu perfil…</p>
+              ) : (
+                <div className="diag-body">
+                  {diagnostico.conteudo.split('\n').map((line, i) => (
+                    <p key={i}>{line}</p>
+                  ))}
+                </div>
+              )}
+              {diagnostico?.source === 'template' && (
+                <p className="muted small">⚠️ Diagnóstico gerado por template (configure ANTHROPIC_API_KEY para uma análise por IA).</p>
+              )}
+            </section>
+          )}
+
           <nav className="tabs">
             {AREAS.map((a) => (
               <button key={a.id} className={tab === a.id ? 'active' : ''} onClick={() => setTab(a.id)}>
                 {a.emoji} {a.label}
               </button>
             ))}
+            <button className={tab === 'faturamento' ? 'active' : ''} onClick={() => setTab('faturamento')}>
+              💰 Faturamento
+            </button>
             <button className={tab === 'perguntar' ? 'active' : ''} onClick={() => setTab('perguntar')}>
               💬 Perguntar
             </button>
           </nav>
 
-          {tab !== 'perguntar' ? (
+          {tab === 'faturamento' ? (
+            <section className="card">
+              <h2>💰 Faturamento</h2>
+              <p className="muted">Lance suas receitas e despesas para acompanhar o saldo e alimentar o diagnóstico.</p>
+
+              <div className="resumo">
+                <div className="resumo-item receita">
+                  <span className="muted">Receitas</span>
+                  <strong>{formatBRL(resumo.totalReceitas)}</strong>
+                </div>
+                <div className="resumo-item despesa">
+                  <span className="muted">Despesas</span>
+                  <strong>{formatBRL(resumo.totalDespesas)}</strong>
+                </div>
+                <div className="resumo-item saldo">
+                  <span className="muted">Saldo</span>
+                  <strong>{formatBRL(resumo.saldo)}</strong>
+                </div>
+              </div>
+
+              <form onSubmit={handleAddLancamento} className="fin-form">
+                <select
+                  value={finForm.tipo}
+                  onChange={(e) =>
+                    setFinForm({ ...finForm, tipo: e.target.value, categoria: CATEGORIAS[e.target.value][0].value })
+                  }
+                >
+                  <option value="receita">Receita</option>
+                  <option value="despesa">Despesa</option>
+                </select>
+                <select value={finForm.categoria} onChange={(e) => setFinForm({ ...finForm, categoria: e.target.value })}>
+                  {CATEGORIAS[finForm.tipo].map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  value={finForm.descricao}
+                  onChange={(e) => setFinForm({ ...finForm, descricao: e.target.value })}
+                  placeholder="Descrição (opcional)"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={finForm.valor}
+                  onChange={(e) => setFinForm({ ...finForm, valor: e.target.value })}
+                  placeholder="Valor (R$)"
+                  required
+                />
+                <input type="date" value={finForm.data} onChange={(e) => setFinForm({ ...finForm, data: e.target.value })} required />
+                <button type="submit" disabled={finSaving}>
+                  {finSaving ? 'Salvando…' : '+ Lançar'}
+                </button>
+              </form>
+              {finMsg && <p className="msg">{finMsg}</p>}
+
+              <div className="lancamentos">
+                {loadingFin && <p className="muted">Carregando…</p>}
+                {!loadingFin && lancamentos.length === 0 && <p className="muted">Nenhum lançamento ainda.</p>}
+                {lancamentos.map((l) => (
+                  <div key={l.id} className={`lancamento ${l.tipo}`}>
+                    <div>
+                      <strong>{l.descricao || (l.tipo === 'receita' ? 'Receita' : 'Despesa')}</strong>
+                      <p className="muted small">
+                        {new Date(l.data).toLocaleDateString('pt-BR')} · {l.categoria.replace(/_/g, ' ')}
+                      </p>
+                    </div>
+                    <div className="lancamento-right">
+                      <span className={l.tipo === 'receita' ? 'valor-receita' : 'valor-despesa'}>
+                        {l.tipo === 'receita' ? '+' : '-'} {formatBRL(l.valor)}
+                      </span>
+                      <button className="close" onClick={() => handleDeleteLancamento(l.id)} title="Excluir">
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : tab !== 'perguntar' ? (
             <section className="card">
               <h2>
                 {area.emoji} {area.label}
@@ -309,6 +658,40 @@ export default function SegundoCerebro() {
         .chat-item { background: #0f1220; border: 1px solid #262b44; border-radius: 10px; padding: 12px; }
         .chat-q { font-weight: 600; font-size: 0.9rem; }
         .chat-a { color: #cbd0e6; font-size: 0.9rem; margin-top: 8px; white-space: pre-wrap; line-height: 1.5; }
+
+        .wizard .progress { background: #0f1220; border-radius: 20px; height: 6px; margin: 12px 0 20px; overflow: hidden; }
+        .wizard .progress-bar { background: #6c7bff; height: 100%; transition: width 0.3s ease; }
+        .wizard h2 { font-size: 1.25rem; margin-bottom: 16px; }
+        .options { display: flex; flex-direction: column; gap: 10px; }
+        .option { background: #0f1220; border: 1px solid #2e3450; color: #e8eaf2; text-align: left; font-weight: 500; }
+        .option:hover { border-color: #6c7bff; background: #141935; }
+        .wizard .back { margin-top: 16px; }
+        .summary { list-style: none; display: flex; flex-direction: column; gap: 10px; margin: 16px 0; }
+        .summary li { display: flex; flex-direction: column; gap: 2px; background: #0f1220; border: 1px solid #262b44; border-radius: 8px; padding: 10px 12px; }
+        .summary li strong { font-size: 0.82rem; color: #9aa0b5; }
+        .summary li span { font-size: 0.95rem; }
+        .wizard .actions { display: flex; gap: 10px; margin-top: 8px; }
+
+        .diagnostico .diag-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+        .diag-body { margin-top: 12px; color: #cbd0e6; font-size: 0.92rem; line-height: 1.6; }
+        .diag-body p { margin-bottom: 4px; }
+
+        .resumo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0; }
+        @media (max-width: 640px) { .resumo { grid-template-columns: 1fr; } }
+        .resumo-item { background: #0f1220; border: 1px solid #262b44; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+        .resumo-item strong { font-size: 1.15rem; }
+        .resumo-item.receita strong { color: #58d68d; }
+        .resumo-item.despesa strong { color: #e74c3c; }
+        .fin-form { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+        .fin-form select { flex: 1; min-width: 140px; }
+        .fin-form input[type='text'], .fin-form input:not([type]) { flex: 2; min-width: 160px; }
+        .fin-form input[type='number'] { flex: 1; min-width: 120px; }
+        .fin-form input[type='date'] { flex: 1; min-width: 150px; }
+        .lancamentos { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+        .lancamento { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: #0f1220; border: 1px solid #262b44; border-radius: 10px; padding: 12px 14px; }
+        .lancamento-right { display: flex; align-items: center; gap: 12px; }
+        .valor-receita { color: #58d68d; font-weight: 600; }
+        .valor-despesa { color: #e74c3c; font-weight: 600; }
       `}</style>
     </div>
   );

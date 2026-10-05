@@ -1,8 +1,9 @@
 # 🧠 Segundo Cérebro
 
-MVP de um "segundo cérebro" para dono de pequena/média empresa: captura
-rápida de anotações soltas, organizadas por IA em áreas fixas de negócio, e
-um chat que responde perguntas puxando contexto dessas anotações.
+Produto de IA pra dono de pequena/média empresa: um onboarding que
+mapeia o modelo de negócio, um diagnóstico gerado por IA a partir dele, um
+painel de faturamento (receitas/despesas) e um "segundo cérebro" de notas
+por área que alimenta um chat de perguntas e respostas.
 
 ## Como rodar
 
@@ -14,19 +15,26 @@ cp .env.example .env.local
 npm run dev                  # abre em http://localhost:3000/segundo-cerebro
 ```
 
-Antes de rodar, crie a tabela no seu projeto Supabase: cole o conteúdo de
-`supabase/migrations/0001_segundo_cerebro_notes.sql` no SQL Editor do painel
-Supabase (ou rode via `supabase db push` se usar a CLI).
+Antes de rodar, crie as tabelas no seu projeto Supabase: cole o conteúdo de
+`supabase/migrations/0001_segundo_cerebro_notes.sql` e
+`supabase/migrations/0002_perfil_e_financeiro.sql` (nessa ordem) no SQL
+Editor do painel Supabase (ou rode via `supabase db push` se usar a CLI).
 
 ## Como usar
 
 1. Na primeira visita, informe o nome da empresa (fica salvo só no seu
-   navegador — cada empresa tem sua própria memória).
-2. Escolha uma área (Visão & Estratégia, Financeiro, Marketing & Vendas,
-   Operações, Pessoas & Equipe, Clientes) e escreva qualquer anotação solta.
-   Com `ANTHROPIC_API_KEY` configurada, a IA organiza em título + resumo +
-   tags; sem ela, a nota é salva como veio (sem organização).
-3. Na aba **💬 Perguntar**, faça perguntas em linguagem natural — a resposta
+   navegador — cada empresa tem sua própria memória) e responda o
+   onboarding: modelo de negócio (franquia/marca própria), segmento, tempo
+   de mercado, faixa de faturamento, tamanho da equipe e maior desafio.
+2. Ao final, a IA gera um **diagnóstico inicial** (resumo do negócio, pontos
+   de atenção e prioridades para 90 dias) com base nas respostas — pode
+   gerar de novo quando quiser.
+3. Na aba **💰 Faturamento**, lance receitas e despesas (categoria, valor,
+   data) e acompanhe o saldo; esses números entram no próximo diagnóstico.
+4. Nas demais abas (Visão & Estratégia, Financeiro, Marketing & Vendas,
+   Operações, Pessoas & Equipe, Clientes), escreva anotações soltas — a IA
+   organiza em título + resumo + tags.
+5. Na aba **💬 Perguntar**, faça perguntas em linguagem natural — a resposta
    usa as notas salvas em todas as áreas como contexto.
 
 ## O que funciona sem credenciais
@@ -37,23 +45,38 @@ pedindo pra configurar). `ANTHROPIC_API_KEY` é opcional:
 
 | Recurso | Sem `ANTHROPIC_API_KEY` | Com `ANTHROPIC_API_KEY` |
 |---|---|---|
-| Captura e listagem de notas | ✅ | ✅ |
+| Onboarding, faturamento, captura e listagem de notas | ✅ | ✅ |
+| Diagnóstico inicial | ⚠️ gerado por regras simples (desafio → conselho fixo) | ✅ análise personalizada |
 | Organização da nota (título/resumo/tags) | ⚠️ nota salva sem organizar | ✅ |
 | Perguntar ao segundo cérebro | ⚠️ lista as notas mais recentes | ✅ resposta gerada com contexto |
 
 ## Estrutura
 
-- `pages/segundo-cerebro/index.js` — interface (áreas de captura + chat);
+- `pages/segundo-cerebro/index.js` — interface (onboarding, diagnóstico,
+  faturamento, áreas de captura e chat);
+- `pages/api/segundo-cerebro/profile.js` — perfil de negócio (`GET`/`POST`);
+- `pages/api/segundo-cerebro/diagnostico.js` — diagnóstico por IA
+  (`GET` busca o salvo, `POST` gera/regenera);
+- `pages/api/segundo-cerebro/financeiro.js` — lançamentos financeiros
+  (`GET`/`POST`/`DELETE`, com totais agregados);
 - `pages/api/segundo-cerebro/notes.js` — CRUD de notas (`GET`/`POST`/`DELETE`);
 - `pages/api/segundo-cerebro/ask.js` — pergunta ao segundo cérebro;
 - `lib/segundo-cerebro/areas.js` — as 6 áreas fixas do framework de captura;
+- `lib/segundo-cerebro/onboarding.js` — as perguntas do onboarding;
+- `lib/segundo-cerebro/categorias.js` — categorias de receita/despesa
+  (compartilhado entre API e UI, sem dependência de servidor);
 - `lib/segundo-cerebro/supabase.js` — cliente Supabase server-side (service
   role key — nunca importar fora das rotas `/api`);
 - `lib/segundo-cerebro/store.js` — CRUD de notas na tabela
   `segundo_cerebro_notes`;
-- `lib/segundo-cerebro/ai.js` — organização de notas e resposta a perguntas
-  via Claude (com fallback sem IA);
-- `supabase/migrations/0001_segundo_cerebro_notes.sql` — schema da tabela.
+- `lib/segundo-cerebro/profile-store.js` — CRUD de `business_profile` e
+  `business_diagnostico`;
+- `lib/segundo-cerebro/financeiro-store.js` — CRUD de
+  `financeiro_lancamentos` e cálculo de totais;
+- `lib/segundo-cerebro/ai.js` — organização de notas, resposta a perguntas e
+  geração do diagnóstico via Claude (com fallback sem IA);
+- `supabase/migrations/0001_segundo_cerebro_notes.sql` e
+  `0002_perfil_e_financeiro.sql` — schema das tabelas.
 
 ## Limitações do MVP (o que falta pra produção)
 
@@ -72,3 +95,13 @@ pedindo pra configurar). `ANTHROPIC_API_KEY` é opcional:
   estruturados na tabela, mas falta um endpoint que monte um `.zip` de
   arquivos `.md` com frontmatter pro cliente baixar e abrir no Obsidian
   dele.
+- **Faturamento é lançamento manual** — sem integração com banco/Pix/NF-e;
+  cada receita/despesa é digitada. Pra reduzir fricção, o próximo passo
+  natural é importar extrato (CSV/OFX) ou conectar via open finance, em vez
+  de pedir que o dono digite tudo.
+- **Diagnóstico é só a "primeira foto"** — gerado uma vez no onboarding
+  (ou quando o dono clica em regenerar), não reage automaticamente a cada
+  novo lançamento financeiro ou nota. Para virar algo "vivo", a próxima
+  evolução é recalcular quando houver dado novo relevante (ex: X
+  lançamentos desde o último diagnóstico) em vez de depender de o dono
+  clicar.
