@@ -1,0 +1,11 @@
+{
+  "name": "EntreNós",
+  "short_name": "EntreNós",
+  "description": "Cartas digitais para casais se reaproximarem.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fbf5f1",
+  "theme_color": "#c2416b",
+  "lang": "pt-BR",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
