@@ -322,4 +322,6 @@ conversas          id, casal_id, roteiro_id, iniciada_por, status, acordo, criad
 | 4 | Contador de intimidade | **Ligado por padrão** (pode ser desligado) |
 | 5 | Pontuação da avaliação | **Média** dos dois |
 | 6 | Protótipo `entrenos/` | **Guardado** como referência de regras e conteúdo |
-| 7 | Progressão | **Trilhas temáticas** (Olimpo, Arcanos…) sobre o Mapa de pilares — em validação, ver [TRILHAS.md](TRILHAS.md) |
+| 7 | Progressão | **Trilhas temáticas** sobre o Mapa de pilares, ver [TRILHAS.md](TRILHAS.md) |
+| 8 | Trilhas ativas | **Uma por vez**, com troca livre |
+| 9 | Primeira trilha | **Olimpo: "Do Submundo às Estrelas"** (única do MVP) |

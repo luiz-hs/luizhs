@@ -9,7 +9,7 @@
 - O **Mapa do casal** é a avaliação dos 5 **pilares**: Comunicação, Intimidade & Carinho, Tempo juntos, Parceria & Cuidado e Sonhos & Futuro. Ele mostra *onde* o casal está, num gráfico de radar.
 - As **Trilhas** são **jornadas narrativas com tema próprio**. Elas fazem o casal *sair do lugar*. Cada fase de uma trilha é uma lenda ou um personagem, ensina uma lição sobre relacionamento e treina um dos pilares.
 
-O casal escolhe **uma trilha ativa por vez** e pode trocar quando quiser, sem perder o progresso. Cada trilha tem uma **identidade visual** e uma **recompensa final** únicas.
+O casal tem **uma trilha ativa por vez** e pode trocar quando quiser, sem perder o progresso. **A primeira trilha é o Olimpo**, a única do MVP. Cada trilha tem uma **identidade visual** e uma **recompensa final** únicas.
 
 ---
 
@@ -181,9 +181,13 @@ Aqui o tarô é usado como **linguagem simbólica de arquétipos**, como Jung o 
 | **O Jardim das Estações** | Plantar, regar e colher: uma trilha leve, para casais que preferem algo menos místico | O jardim florido do casal |
 | **Lendas do Brasil** | Iara, Boto, Vitória-régia, Saci… o folclore brasileiro com lições sobre amor e confiança | O mapa encantado do Brasil |
 
-## 7. Pontos para validar
-1. **Uma trilha ativa por vez** (com troca livre) ou **várias ao mesmo tempo**?
-2. Os **Arcanos** liberados só depois do **Olimpo ou do nível 3**, ou disponíveis desde o início?
-3. As **3 missões por fase** (conversa, gesto, vivência): o ritmo parece bom? Fica perto de 1 fase a cada 1–2 semanas.
-4. Os **nomes**: "Do Submundo às Estrelas" e "A Jornada do Louco" funcionam?
-5. Os mitos escolhidos (e os que deixamos de fora) fazem sentido para você?
+## 7. Decisões
+| Tema | Decisão |
+|---|---|
+| Trilhas simultâneas | **Uma trilha ativa por vez**, com troca livre e progresso salvo |
+| Primeira trilha | **Trilha I — Olimpo: "Do Submundo às Estrelas"**, a trilha de entrada e a única do MVP |
+| Arcanos e demais trilhas | Ficam para depois do MVP (Arcanos liberados ao concluir o Olimpo ou no nível 3) |
+
+### Ainda em aberto
+1. Ritmo de **3 missões por fase** (cerca de uma fase a cada 1–2 semanas).
+2. Validação final dos mitos escolhidos para cada fase do Olimpo.
